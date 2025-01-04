@@ -1,0 +1,68 @@
+use colored::Colorize;
+use crate::board_state::BoardState;
+type Player = fn(&BoardState) -> u8;
+
+#[derive(Clone, Copy)]
+pub struct Mankala {
+    board: BoardState,
+    players: [Player; 2]
+}
+
+impl Mankala {
+    pub fn new(p1_logic: Player, p2_logic: Player) -> Self {
+        Mankala {
+            board: BoardState::new(),
+            players: [p1_logic, p2_logic]
+        }
+    }
+
+    pub fn play(&mut self) -> bool {
+        'game: loop {
+            for player in self.players {
+                self.board.make_move(player(&self.board));
+                if self.board.is_won() {
+                    break 'game;
+                }
+            }
+        }
+        !self.board.get_current_player()
+    }
+
+    pub fn print_play(&mut self) -> bool {
+        let mut i = 1;
+        'game: loop {
+            for player in self.players {
+                let choice = player(&self.board);
+                println!("Player {}: {choice}", !self.board.get_current_player() as u8 + 1);
+                println!("{i}: {}\n", self.board);
+                self.board.make_move(choice);
+                if self.board.is_won() {
+                    break 'game;
+                }
+            }
+            i += 1;
+        }
+        !self.board.get_current_player()
+    }
+
+    pub fn stats(&self, num_of_games: u32) {
+        use std::time::Instant;
+        let now = Instant::now();
+        let mut first_player_won = 0;
+        let mut second_player_won = 0;
+
+        for _ in 0..num_of_games {
+            if self.clone().play() {
+                first_player_won += 1;
+            }
+            else {
+                second_player_won += 1;
+            }
+        }
+
+        let elapsed = now.elapsed();
+        println!("{} win rate: {}%", "Player 1".red(),  (first_player_won as f64)/ (num_of_games as f64) * 100.);
+        println!("{} win rate: {}%", "Player 2".green(), (second_player_won as f64)/ (num_of_games as f64) * 100.);
+        println!("Time / game: {:.2?}", elapsed);
+    }
+}
