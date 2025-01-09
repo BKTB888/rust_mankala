@@ -2,7 +2,12 @@ use colored::Colorize;
 use rand::Rng;
 use crate::board_state::BoardState;
 use crate::mankala::Mankala;
+/*
+make min max random,
+    make it useful for odd numbers,
+    minimize recalculation
 
+ */
 pub mod mankala;
 pub mod board_state;
 
@@ -20,8 +25,7 @@ fn human(board: &BoardState) -> u8 {
         true => println!("{}", "Player 1's choice: ".red()),
         false => println!("{}", "Player 2's choice: ".green())
     }
-
-    loop {
+    let choice= loop {
         let mut input = String::new();
         std::io::stdin()
             .read_line(&mut input)
@@ -35,15 +39,17 @@ fn human(board: &BoardState) -> u8 {
         } else {
             println!("Invalid choice. Please try again.");
         }
-    }
+    };
+    println!("Result: {}\n", board.clone().make_move(choice));
+    choice
 }
 
-/*
-fn ai_creator(eval_func: fn(&BoardState, u8) -> f64, depth: u8) -> impl Fn(&BoardState) -> u8 {
+
+fn ai_creator(depth: u8) -> impl Fn(&BoardState) -> u8 {
     move |board| {
         board.get_valid_choices().iter()
             .map(|&choice| (choice, *board.clone().make_move(choice)))
-            .map(|(choice, board)| (choice, eval_func(&board, depth)))
+            .map(|(choice, board)| (choice, min_max(&board, depth)))
             .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
             .map(|(choice, _)| choice)
             .unwrap()
@@ -52,23 +58,40 @@ fn ai_creator(eval_func: fn(&BoardState, u8) -> f64, depth: u8) -> impl Fn(&Boar
 
 fn min_max(board: &BoardState, depth: u8) -> f64 {
 
-    if board.is_won() {
-        return 1.0;
-    }
-    if depth == 0 {
-        let balls_at_op = board.opponent_side().iter().sum();
-        balls_at_op / (balls_at_op + board.current_side().iter().sum())
+    fn recursive(board: &BoardState, depth: u8, use_max: bool) -> f64 {
+        if board.is_won() {
+            return if use_max {
+                0.0
+            } else {
+                1.0
+            }
+        }
+
+        if depth == 0 {
+            let balls_at_op: u8 = board.opponent_side().iter().sum();
+            let balls_at_me: u8 = board.current_side().iter().sum();
+            return (balls_at_op as f64) / ((balls_at_op + balls_at_me) as f64);
+        }
+
+        let ratings = board.get_valid_choices().into_iter()
+            .map(|choice| *board.clone().make_move(choice))
+            .map(|board| recursive(&board, depth - 1, !use_max))
+            .collect::<Vec<_>>();
+        if use_max {
+            *ratings.iter().max_by(|a, b| a.partial_cmp(&b).unwrap())
+                .unwrap()
+        }
+        else {
+            *ratings.iter().min_by(|a, b| a.partial_cmp(&b).unwrap())
+                .unwrap()
+        }
     }
 
-    board.get_valid_choices().iter()
-        .map(|choice| board.clone().make_move(*choice))
-        .map(|board| min_max(board, depth - 1))
-        .max_by(|a, b| a.partial_cmp(&b).unwrap())
-        .unwrap()
+    recursive(board, depth, true)
 }
 
- */
-
 fn main() {
-    //Mankala::new(randy, randy).stats(100);
+    let mut mankala = Mankala::new(randy, ai_creator(10));
+    //mankala.set_board(BoardState::from([1; 14]));
+    mankala.stats(10);
 }
