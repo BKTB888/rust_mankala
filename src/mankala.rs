@@ -37,7 +37,7 @@ impl Mankala {
         'game: loop {
             for player in &self.players {
                 let choice = player(&self.board);
-                println!("Player {}: {choice}", !self.board.get_current_player() as u8 + 1);
+                println!("Player {}: {}", !self.board.get_current_player() as u8 + 1, choice + 1);
                 println!("{i}: {}\n", self.board);
                 self.board.make_move(choice);
                 if self.board.is_won() {

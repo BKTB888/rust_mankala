@@ -70,7 +70,12 @@ fn min_max(board: &BoardState, depth: u8) -> f64 {
         if depth == 0 {
             let balls_at_op: u8 = board.opponent_side().iter().sum();
             let balls_at_me: u8 = board.current_side().iter().sum();
-            return (balls_at_op as f64) / ((balls_at_op + balls_at_me) as f64);
+            let sum = (balls_at_op + balls_at_me) as f64;
+            return if use_max {
+                (balls_at_op as f64) / sum
+            } else {
+                (balls_at_me as f64) / sum
+            }
         }
 
         let ratings = board.get_valid_choices().into_iter()
@@ -91,7 +96,7 @@ fn min_max(board: &BoardState, depth: u8) -> f64 {
 }
 
 fn main() {
-    let mut mankala = Mankala::new(randy, ai_creator(10));
+    let mut mankala = Mankala::new(ai_creator(8), randy);
     //mankala.set_board(BoardState::from([1; 14]));
-    mankala.stats(10);
+    mankala.stats(100);
 }
