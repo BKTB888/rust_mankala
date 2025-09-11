@@ -73,7 +73,11 @@ impl BoardState {
         (0..6).into_iter()
             .map(|choice| self.get_idx(choice, is_first_player))
             .map(|idx| self.board[idx as usize])
-            .collect::<Vec<_>>().try_into().unwrap()
+            .enumerate()
+            .fold([0; 6], |mut acc, (idx, value)| {
+                acc[idx] = value;
+                acc
+            })
     }
     pub fn current_side(&self) -> [u8; 6] {
         self.get_side(self.is_first_player)

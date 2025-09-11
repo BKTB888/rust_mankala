@@ -21,10 +21,14 @@ fn human(board: &BoardState) -> u8 {
     println!("{}", board);
     let valid_choices = board.get_valid_choices();
     println!("Available choices: {:?}", valid_choices.iter().map(|i| i + 1).collect::<Vec<_>>());
-    match board.get_current_player() {
-        true => println!("{}", "Player 1's choice: ".red()),
-        false => println!("{}", "Player 2's choice: ".green())
-    }
+    print!(
+        "{}",
+        if board.get_current_player() {
+            "Player 1's choice: ".red()
+        } else {
+            "Player 2's choice: ".green()
+        }
+    );
     let choice= loop {
         let mut input = String::new();
         std::io::stdin()
@@ -45,58 +49,80 @@ fn human(board: &BoardState) -> u8 {
 }
 
 
-fn ai_creator(depth: u8) -> impl Fn(&BoardState) -> u8 {
+fn ai_creator(eval: fn(&BoardState) -> f32) -> impl Fn(&BoardState) -> u8 {
     move |board| {
         board.get_valid_choices().iter()
             .map(|&choice| (choice, *board.clone().make_move(choice)))
-            .map(|(choice, board)| (choice, min_max(&board, depth)))
+            .map(|(choice, board)| (choice, eval(&board)))
             .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
             .map(|(choice, _)| choice)
             .unwrap()
     }
 }
 
-fn min_max(board: &BoardState, depth: u8) -> f64 {
+fn base_eval(board: &BoardState) -> f32 {
+    let balls_at_op: u8 = board.opponent_side().iter().sum();
+    let balls_at_me: u8 = board.current_side().iter().sum();
+    let sum = (balls_at_op + balls_at_me) as f32;
 
-    fn recursive(board: &BoardState, depth: u8, use_max: bool) -> f64 {
+    (balls_at_op as f32) / sum
+}
+
+fn stupid_eval(_: &BoardState) -> f32 {
+    0.5
+}
+
+fn minimax(board: &BoardState, depth: u8, zero_depth_eval: fn(&BoardState) -> f32) -> f32 {
+
+    fn recursive(board: &BoardState, depth: u8, my_turn: bool, zero_depth_eval: fn(&BoardState) -> f32) -> f32 {
         if board.is_won() {
-            return if use_max {
-                0.0
-            } else {
-                1.0
-            }
+            return 0.0
         }
 
         if depth == 0 {
-            let balls_at_op: u8 = board.opponent_side().iter().sum();
-            let balls_at_me: u8 = board.current_side().iter().sum();
-            let sum = (balls_at_op + balls_at_me) as f64;
-            return if use_max {
-                (balls_at_op as f64) / sum
-            } else {
-                (balls_at_me as f64) / sum
-            }
+            return zero_depth_eval(board)
         }
 
-        let ratings = board.get_valid_choices().into_iter()
+        1.0 - board.get_valid_choices().into_iter()
             .map(|choice| *board.clone().make_move(choice))
-            .map(|board| recursive(&board, depth - 1, !use_max))
-            .collect::<Vec<_>>();
-        if use_max {
-            *ratings.iter().max_by(|a, b| a.partial_cmp(&b).unwrap())
-                .unwrap()
-        }
-        else {
-            *ratings.iter().min_by(|a, b| a.partial_cmp(&b).unwrap())
-                .unwrap()
-        }
+            .map(|board| recursive(&board, depth - 1, !my_turn, zero_depth_eval))
+            .min_by(|a, b| a.partial_cmp(&b).unwrap())
+            .unwrap()
     }
 
-    recursive(board, depth, true)
+    recursive(board, depth, true, zero_depth_eval)
 }
 
+
+
 fn main() {
-    let mut mankala = Mankala::new(ai_creator(8), randy);
+    //let mut mankala = Mankala::new(human, ai_creator(12));
     //mankala.set_board(BoardState::from([1; 14]));
-    mankala.stats(100);
+    //mankala.print_play();
+    /*
+    Mankala::new(
+        randy,
+        ai_creator(base_eval),
+    ).print_stats(10000);
+    Mankala::new(
+        randy,
+        ai_creator(stupid_eval),
+    ).print_stats(100);
+
+     */
+    Mankala::new(
+        randy,
+        ai_creator(|board| {
+            minimax(board, 10, stupid_eval)
+        })
+    ).print_stats(1);
+    /*
+    Mankala::new(
+        human,
+        ai_creator(|board| {
+            minimax(board, 11, stupid_eval)
+        })
+    ).print_play();
+
+     */
 }

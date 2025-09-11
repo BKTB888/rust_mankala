@@ -56,24 +56,25 @@ impl Mankala {
         winner
     }
 
-    pub fn stats(&self, num_of_games: u32) {
-
+    pub fn stats(&self, num_of_games: u32) -> f64 {
         let mut first_player_won = 0;
-        let mut second_player_won = 0;
-
-        let now = std::time::Instant::now();
         for _ in 0..num_of_games {
             if self.clone().play() {
                 first_player_won += 1;
             }
-            else {
-                second_player_won += 1;
-            }
         }
+        first_player_won as f64 / num_of_games as f64
+    }
+    pub fn print_stats(&self, num_of_games: u32) {
+
+        let now = std::time::Instant::now();
+
+        let player1_percent = self.stats(num_of_games) * 100f64;
 
         let elapsed = now.elapsed();
-        println!("{} win rate: {}%", "Player 1".red(),  (first_player_won as f64)/ (num_of_games as f64) * 100.);
-        println!("{} win rate: {}%", "Player 2".green(), (second_player_won as f64)/ (num_of_games as f64) * 100.);
+
+        println!("{} win rate: {}%", "Player 1".red(),  player1_percent );
+        println!("{} win rate: {}%", "Player 2".green(), 100f64 - player1_percent);
         println!("Time / game: {:.2?}", elapsed / num_of_games);
     }
 }
