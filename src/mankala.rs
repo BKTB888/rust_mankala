@@ -1,18 +1,22 @@
-use std::rc::Rc;
 use colored::Colorize;
+use dyn_clone::DynClone;
 use crate::board_state::BoardState;
-type Player = dyn Fn(&BoardState) -> u8;
+
+pub trait Player: Fn(&BoardState) -> u8 + DynClone + Send{}
+
+impl<T: Fn(&BoardState) -> u8 + Clone + Send> Player for T {}
+dyn_clone::clone_trait_object!(Player);
 #[derive(Clone)]
 pub struct Mankala {
     board: BoardState,
-    players: [Rc<Player>; 2],
+    players: [Box<dyn Player>; 2],
 }
 
 impl Mankala {
-    pub fn new(p1_logic: impl Fn(&BoardState) -> u8 + 'static, p2_logic: impl Fn(&BoardState) -> u8 + 'static) -> Self {
+    pub fn new(p1_logic: impl Player + 'static, p2_logic: impl Player + 'static) -> Self {
         Mankala {
             board: BoardState::new(),
-            players: [Rc::new(p1_logic), Rc::new(p2_logic)]
+            players: [Box::new(p1_logic), Box::new(p2_logic)]
         }
     }
 
@@ -20,6 +24,8 @@ impl Mankala {
         self.board = board;
     }
 
+
+    //Make current, player tied to board_state players
     pub fn play(&mut self) -> bool {
         'game: loop {
             for player in &self.players {
@@ -56,25 +62,39 @@ impl Mankala {
         winner
     }
 
-    pub fn stats(&self, num_of_games: u32) -> f64 {
-        let mut first_player_won = 0;
-        for _ in 0..num_of_games {
-            if self.clone().play() {
-                first_player_won += 1;
-            }
+    pub fn stats(&self, num_of_games: u32, is_parallel: bool) -> f64 {
+        if is_parallel {
+            std::thread::scope(|s| {
+                let handles = (0..num_of_games)
+                    .map(|_|  self.clone() )
+                    .map( |mut game| {
+                        s.spawn( move ||
+                            game.play()
+                        )
+                    }).collect::<Vec<_>>();
+                handles.into_iter().map(|hande| hande.join().unwrap() )
+                    .filter(|&won| won)
+                    .count()
+            }) as f64 / num_of_games as f64
+        } else {
+            let first_player_won = (0..num_of_games).map(|_| {
+                self.clone().play()
+            }).filter(|&won| won)
+                .count();
+            first_player_won as f64 / num_of_games as f64
         }
-        first_player_won as f64 / num_of_games as f64
     }
-    pub fn print_stats(&self, num_of_games: u32) {
+    pub fn print_stats(&self, num_of_games: u32, is_async: bool)  {
 
         let now = std::time::Instant::now();
 
-        let player1_percent = self.stats(num_of_games) * 100f64;
+        let player1_percent = self.stats(num_of_games, is_async) * 100f64;
 
         let elapsed = now.elapsed();
 
         println!("{} win rate: {}%", "Player 1".red(),  player1_percent );
         println!("{} win rate: {}%", "Player 2".green(), 100f64 - player1_percent);
         println!("Time / game: {:.2?}", elapsed / num_of_games);
+        print!("Elapsed time: {:.2?}", elapsed);
     }
 }

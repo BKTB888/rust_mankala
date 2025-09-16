@@ -1,7 +1,7 @@
 use colored::Colorize;
-use rand::Rng;
+use rand::{random, Rng};
 use crate::board_state::BoardState;
-use crate::mankala::Mankala;
+use crate::mankala::{Mankala, Player};
 /*
 make min max random,
     make it useful for odd numbers,
@@ -13,7 +13,7 @@ pub mod board_state;
 
 fn randy(board: &BoardState) -> u8 {
     let valid_choices = board.get_valid_choices();
-    let index = rand::thread_rng().gen_range(0..valid_choices.len());
+    let index = rand::rng().random_range(0..valid_choices.len());
     valid_choices[index]
 }
 
@@ -49,7 +49,7 @@ fn human(board: &BoardState) -> u8 {
 }
 
 
-fn ai_creator(eval: fn(&BoardState) -> f32) -> impl Fn(&BoardState) -> u8 {
+fn ai_creator(eval: fn(&BoardState) -> f32) -> impl Player{
     move |board| {
         board.get_valid_choices().iter()
             .map(|&choice| (choice, *board.clone().make_move(choice)))
@@ -93,6 +93,9 @@ fn minimax(board: &BoardState, depth: u8, zero_depth_eval: fn(&BoardState) -> f3
     recursive(board, depth, true, zero_depth_eval)
 }
 
+fn rand_eval(_: &BoardState) -> f32 {
+    random()
+}
 
 
 fn main() {
@@ -110,12 +113,19 @@ fn main() {
     ).print_stats(100);
 
      */
-    Mankala::new(
-        randy,
-        ai_creator(|board| {
-            minimax(board, 10, stupid_eval)
-        })
-    ).print_stats(1);
+
+
+    for is_parallel in [true, false] {
+        println!("\nFor {}:", if is_parallel {"Parallel"} else { "Sync" });
+        Mankala::new(
+            ai_creator(|board| {
+                minimax(board, 6, stupid_eval)
+            }),
+            ai_creator(|board| {
+                minimax(board, 6, rand_eval)
+            }),
+        ).print_stats(100, is_parallel)
+    };
     /*
     Mankala::new(
         human,
