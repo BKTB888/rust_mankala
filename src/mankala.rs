@@ -1,8 +1,8 @@
-use colored::Colorize;
+use colored::{ColoredString, Colorize};
 use dyn_clone::DynClone;
 use crate::board_state::BoardState;
-
-pub trait Player: Fn(&BoardState) -> u8 + DynClone + Send{}
+use rayon::prelude::*;
+pub trait Player: Fn(&BoardState) -> u8 + DynClone + Send {}
 
 impl<T: Fn(&BoardState) -> u8 + Clone + Send> Player for T {}
 dyn_clone::clone_trait_object!(Player);
@@ -37,13 +37,20 @@ impl Mankala {
         }
         !self.board.get_current_player()
     }
-
+    fn get_colored(is_first: bool) -> ColoredString {
+        if is_first {
+            "Player 1".red()
+        } else {
+            "Player 2".green()
+        }
+    }
     pub fn print_play(&mut self) -> bool {
+        println!("Starting Board: {}\n", self.board);
         let mut i = 1;
         'game: loop {
             for player in &self.players {
                 let choice = player(&self.board);
-                println!("Player {}: {}", !self.board.get_current_player() as u8 + 1, choice + 1);
+                println!("{}: {}", Self::get_colored(!self.board.get_current_player()), choice + 1);
                 println!("{i}: {}\n", self.board);
                 self.board.make_move(choice);
                 if self.board.is_won() {
@@ -63,38 +70,35 @@ impl Mankala {
     }
 
     pub fn stats(&self, num_of_games: u32, is_parallel: bool) -> f64 {
-        if is_parallel {
-            std::thread::scope(|s| {
-                let handles = (0..num_of_games)
-                    .map(|_|  self.clone() )
-                    .map( |mut game| {
-                        s.spawn( move ||
-                            game.play()
-                        )
-                    }).collect::<Vec<_>>();
-                handles.into_iter().map(|hande| hande.join().unwrap() )
-                    .filter(|&won| won)
-                    .count()
-            }) as f64 / num_of_games as f64
+        return  if is_parallel {
+            (0..num_of_games)
+                .map(|_| self.clone() )
+                .fold(Vec::with_capacity(num_of_games as usize), |mut acc, game| {
+                    acc.push(game);
+                    acc
+                }).into_par_iter()
+                .map( |mut game| {
+                    game.play()
+                }).filter(|&won| won).count()
         } else {
-            let first_player_won = (0..num_of_games).map(|_| {
+            (0..num_of_games).map(|_| {
                 self.clone().play()
             }).filter(|&won| won)
-                .count();
-            first_player_won as f64 / num_of_games as f64
-        }
+                .count()
+        } as f64 / num_of_games as f64
     }
-    pub fn print_stats(&self, num_of_games: u32, is_async: bool)  {
+    pub fn print_stats(&self, num_of_games: u32, is_parallel: bool)  {
 
         let now = std::time::Instant::now();
 
-        let player1_percent = self.stats(num_of_games, is_async) * 100f64;
+        let player1_percent = self.stats(num_of_games, is_parallel) * 100f64;
 
         let elapsed = now.elapsed();
 
+        println!("\nFor {}:", if is_parallel {"Parallel"} else { "Sync" });
         println!("{} win rate: {}%", "Player 1".red(),  player1_percent );
         println!("{} win rate: {}%", "Player 2".green(), 100f64 - player1_percent);
         println!("Time / game: {:.2?}", elapsed / num_of_games);
-        print!("Elapsed time: {:.2?}", elapsed);
+        println!("Elapsed time: {:.2?}", elapsed);
     }
 }

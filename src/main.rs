@@ -1,13 +1,39 @@
 use colored::Colorize;
 use rand::{random, Rng};
 use crate::board_state::BoardState;
-use crate::mankala::{Mankala, Player};
+use crate::mankala::{Mankala};
+use rayon::prelude::*;
 /*
 make min max random,
     make it useful for odd numbers,
     minimize recalculation
-
  */
+
+macro_rules! ai_creator {
+    ($eval_func:expr, $with_parallel:expr) => {
+        if $with_parallel {
+            |board: &BoardState| {
+                board.get_valid_choices()
+                    .into_par_iter()
+                    .map(|choice| (choice, *board.clone().make_move(choice)))
+                    .map(|(choice, board)| (choice, $eval_func(&board)))
+                    .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+                    .map(|(choice, _)| choice)
+                    .unwrap()
+            }
+        } else {
+            |board: &BoardState| {
+                board.get_valid_choices()
+                    .into_iter()
+                    .map(|choice| (choice, *board.clone().make_move(choice)))
+                    .map(|(choice, board)| (choice, $eval_func(&board)))
+                    .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+                    .map(|(choice, _)| choice)
+                    .unwrap()
+            }
+        }
+    };
+}
 pub mod mankala;
 pub mod board_state;
 
@@ -47,19 +73,6 @@ fn human(board: &BoardState) -> u8 {
     println!("Result: {}\n", board.clone().make_move(choice));
     choice
 }
-
-
-fn ai_creator(eval: fn(&BoardState) -> f32) -> impl Player{
-    move |board| {
-        board.get_valid_choices().iter()
-            .map(|&choice| (choice, *board.clone().make_move(choice)))
-            .map(|(choice, board)| (choice, eval(&board)))
-            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
-            .map(|(choice, _)| choice)
-            .unwrap()
-    }
-}
-
 fn base_eval(board: &BoardState) -> f32 {
     let balls_at_op: u8 = board.opponent_side().iter().sum();
     let balls_at_me: u8 = board.current_side().iter().sum();
@@ -114,18 +127,23 @@ fn main() {
 
      */
 
-
-    for is_parallel in [true, false] {
-        println!("\nFor {}:", if is_parallel {"Parallel"} else { "Sync" });
+    for with_parallel in [false, true] {
+        print!("\nWith {} AI:", if with_parallel {"parallel"} else {"sync"});
         Mankala::new(
-            ai_creator(|board| {
-                minimax(board, 6, stupid_eval)
-            }),
-            ai_creator(|board| {
-                minimax(board, 6, rand_eval)
-            }),
-        ).print_stats(100, is_parallel)
+            randy,
+            ai_creator!(|board| {
+                minimax(board, 10, stupid_eval)
+            }, with_parallel)
+        ).print_stats(1, false);
     };
+    println!();
+    Mankala::new(
+        randy,
+        ai_creator!(
+            |board| {
+                minimax(board, 14, stupid_eval)
+            },true)
+    ).print_play();
     /*
     Mankala::new(
         human,
