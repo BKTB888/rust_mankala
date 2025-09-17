@@ -1,13 +1,11 @@
+use std::io::Write;
+use std::time::Duration;
 use colored::Colorize;
+use partial_application::partial;
 use rand::{random, Rng};
 use crate::board_state::BoardState;
 use crate::mankala::{Mankala};
 use rayon::prelude::*;
-/*
-make min max random,
-    make it useful for odd numbers,
-    minimize recalculation
- */
 
 macro_rules! ai_creator {
     ($eval_func:expr, $with_parallel:expr) => {
@@ -15,7 +13,11 @@ macro_rules! ai_creator {
             |board: &BoardState| {
                 board.get_valid_choices()
                     .into_par_iter()
-                    .map(|choice| (choice, *board.clone().make_move(choice)))
+                    .map(|choice| (choice, board.clone()))
+                    .map(|(choice, mut board)| {
+                        board.make_move(choice);
+                        (choice, board)
+                    })
                     .map(|(choice, board)| (choice, $eval_func(&board)))
                     .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
                     .map(|(choice, _)| choice)
@@ -25,7 +27,11 @@ macro_rules! ai_creator {
             |board: &BoardState| {
                 board.get_valid_choices()
                     .into_iter()
-                    .map(|choice| (choice, *board.clone().make_move(choice)))
+                    .map(|choice| (choice, board.clone()))
+                    .map(|(choice, mut board)| {
+                        board.make_move(choice);
+                        (choice, board)
+                    })
                     .map(|(choice, board)| (choice, $eval_func(&board)))
                     .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
                     .map(|(choice, _)| choice)
@@ -47,19 +53,25 @@ fn human(board: &BoardState) -> u8 {
     println!("{}", board);
     let valid_choices = board.get_valid_choices();
     println!("Available choices: {:?}", valid_choices.iter().map(|i| i + 1).collect::<Vec<_>>());
-    print!(
-        "{}",
-        if board.get_current_player() {
-            "Player 1's choice: ".red()
-        } else {
-            "Player 2's choice: ".green()
-        }
-    );
     let choice= loop {
+        print!(
+            "{}",
+            if board.get_current_player() {
+                "Player 1's choice: ".red()
+            } else {
+                "Player 2's choice: ".green()
+            }
+        );
+        std::io::stdout().flush().unwrap();
         let mut input = String::new();
         std::io::stdin()
             .read_line(&mut input)
-            .expect("Failed to read line. Please try again.");
+            .unwrap_or_else(
+                |_| {
+                    println!("Failed to read line. Please try again.");
+                    100
+                }
+            );
 
         let number: Result<u8, _> = input.trim().parse();
         let choice = number.unwrap_or(7) - 1;
@@ -70,7 +82,9 @@ fn human(board: &BoardState) -> u8 {
             println!("Invalid choice. Please try again.");
         }
     };
-    println!("Result: {}\n", board.clone().make_move(choice));
+    let mut copy = board.clone();
+    copy.make_move(choice);
+    println!("Result: {}\n", copy);
     choice
 }
 fn base_eval(board: &BoardState) -> f32 {
@@ -97,9 +111,13 @@ fn minimax(board: &BoardState, depth: u8, zero_depth_eval: fn(&BoardState) -> f3
         }
 
         1.0 - board.get_valid_choices().into_iter()
-            .map(|choice| *board.clone().make_move(choice))
+            .map(|choice| (choice, board.clone()))
+            .map(|(choice, mut  board)| {
+                board.make_move(choice);
+                board
+            })
             .map(|board| recursive(&board, depth - 1, !my_turn, zero_depth_eval))
-            .min_by(|a, b| a.partial_cmp(&b).unwrap())
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap()
     }
 
@@ -109,48 +127,32 @@ fn minimax(board: &BoardState, depth: u8, zero_depth_eval: fn(&BoardState) -> f3
 fn rand_eval(_: &BoardState) -> f32 {
     random()
 }
-
+fn iterative_deepening_eval(depth_eval: impl Fn(&BoardState, u8) -> f32, time_constraint: Duration) -> impl Fn(&BoardState)-> f32 {
+    move |board| {
+        let start = std::time::Instant::now();
+        let mut result = depth_eval(board, 0);
+        let mut depth = 0;
+        while time_constraint  > start.elapsed() {
+            depth += 1;
+            result = depth_eval(board, depth);
+            if (result - 1.0).abs() < f32::EPSILON || result < f32::EPSILON {
+                break;
+            }
+        }
+        println!("Depth: {depth}, Result: {result}");
+        result
+    }
+}
 
 fn main() {
-    //let mut mankala = Mankala::new(human, ai_creator(12));
-    //mankala.set_board(BoardState::from([1; 14]));
-    //mankala.print_play();
-    /*
-    Mankala::new(
-        randy,
-        ai_creator(base_eval),
-    ).print_stats(10000);
-    Mankala::new(
-        randy,
-        ai_creator(stupid_eval),
-    ).print_stats(100);
-
-     */
-
-    for with_parallel in [false, true] {
-        print!("\nWith {} AI:", if with_parallel {"parallel"} else {"sync"});
-        Mankala::new(
-            randy,
-            ai_creator!(|board| {
-                minimax(board, 10, stupid_eval)
-            }, with_parallel)
-        ).print_stats(1, false);
-    };
-    println!();
-    Mankala::new(
-        randy,
-        ai_creator!(
-            |board| {
-                minimax(board, 14, stupid_eval)
-            },true)
-    ).print_play();
-    /*
     Mankala::new(
         human,
-        ai_creator(|board| {
-            minimax(board, 11, stupid_eval)
-        })
+        ai_creator!(
+            iterative_deepening_eval(
+                partial!(minimax => _, _, stupid_eval),
+                Duration::from_secs(10)
+            ),
+            true
+        )
     ).print_play();
-
-     */
 }

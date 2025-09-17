@@ -33,7 +33,7 @@ impl BoardState {
         }
     }
 
-    pub fn make_move(&mut self, choice: u8) -> &mut Self {
+    pub fn make_move(&mut self, choice: u8) {
         let mut idx = self.choice_to_idx(choice) as usize;
 
         loop {
@@ -54,7 +54,6 @@ impl BoardState {
             }
         }
         self.is_first_player = !self.is_first_player;
-        self
     }
 
     fn choice_to_idx(&self, choice: u8) -> u8 {
@@ -70,14 +69,15 @@ impl BoardState {
     }
 
     fn get_side(&self, is_first_player: bool) -> [u8; 6] {
+        let mut result = [0; 6];
         (0..6).into_iter()
             .map(|choice| self.get_idx(choice, is_first_player))
             .map(|idx| self.board[idx as usize])
             .enumerate()
-            .fold([0; 6], |mut acc, (idx, value)| {
-                acc[idx] = value;
-                acc
-            })
+            .for_each(|(idx, value)|
+                result[idx] = value
+            );
+        result
     }
     pub fn current_side(&self) -> [u8; 6] {
         self.get_side(self.is_first_player)
@@ -98,11 +98,15 @@ impl BoardState {
     }
 
     pub fn get_valid_choices(&self) -> Vec<u8> {
-        self.current_side().iter()
+        let mut result =Vec::with_capacity(6);
+        self.current_side().into_iter()
             .enumerate()
-            .filter(|(_, &c)| c != 0)
+            .filter(|(_, c)| *c != 0)
             .map(|(i, _)| i as u8)
-        .collect::<Vec<_>>()
+        .for_each(| c|
+            result.push(c)
+        );
+        result
     }
 }
 

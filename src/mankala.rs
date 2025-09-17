@@ -3,7 +3,7 @@ use dyn_clone::DynClone;
 use crate::board_state::BoardState;
 use rayon::prelude::*;
 pub trait Player: Fn(&BoardState) -> u8 + DynClone + Send {}
-
+//Solve current player problem
 impl<T: Fn(&BoardState) -> u8 + Clone + Send> Player for T {}
 dyn_clone::clone_trait_object!(Player);
 #[derive(Clone)]
@@ -50,7 +50,7 @@ impl Mankala {
         'game: loop {
             for player in &self.players {
                 let choice = player(&self.board);
-                println!("{}: {}", Self::get_colored(!self.board.get_current_player()), choice + 1);
+                println!("{}: {}", Self::get_colored(self.board.get_current_player()), choice + 1);
                 println!("{i}: {}\n", self.board);
                 self.board.make_move(choice);
                 if self.board.is_won() {
@@ -96,8 +96,8 @@ impl Mankala {
         let elapsed = now.elapsed();
 
         println!("\nFor {}:", if is_parallel {"Parallel"} else { "Sync" });
-        println!("{} win rate: {}%", "Player 1".red(),  player1_percent );
-        println!("{} win rate: {}%", "Player 2".green(), 100f64 - player1_percent);
+        println!("{} win rate: {}%", Self::get_colored(true),  player1_percent );
+        println!("{} win rate: {}%", Self::get_colored(false), 100f64 - player1_percent);
         println!("Time / game: {:.2?}", elapsed / num_of_games);
         println!("Elapsed time: {:.2?}", elapsed);
     }
